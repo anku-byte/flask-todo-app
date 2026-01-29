@@ -4,7 +4,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+# Render-safe SQLite path
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/database.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -18,31 +19,28 @@ class Todo(db.Model):
     def __repr__(self):
         return f"<Task {self.id}>"
 
+# Create DB tables at startup
+with app.app_context():
+    db.create_all()
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
         task_content = request.form["content"]
         new_task = Todo(content=task_content)
-
-        try:
-            db.session.add(new_task)
-            db.session.commit()
-            return redirect("/")
-        except Exception as e:
-            return f"Error: {e}"
+        db.session.add(new_task)
+        db.session.commit()
+        return redirect("/")
 
     tasks = Todo.query.order_by(Todo.date_created).all()
     return render_template("index.html", tasks=tasks)
 
 @app.route("/delete/<int:id>")
 def delete(id):
-    task_to_delete = Todo.query.get_or_404(id)
-    try:
-        db.session.delete(task_to_delete)
-        db.session.commit()
-        return redirect("/")
-    except Exception as e:
-        return f"Error: {e}"
+    task = Todo.query.get_or_404(id)
+    db.session.delete(task)
+    db.session.commit()
+    return redirect("/")
 
 @app.route("/update/<int:id>", methods=["GET", "POST"])
 def update(id):
@@ -50,19 +48,11 @@ def update(id):
 
     if request.method == "POST":
         task.content = request.form["content"]
-        try:
-            db.session.commit()
-            return redirect("/")
-        except Exception as e:
-            return f"Error: {e}"
+        db.session.commit()
+        return redirect("/")
 
     return render_template("update.html", task=task)
 
+# IMPORTANT: DO NOT run app here (Gunicorn will)
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    if __name__ == "__main__":
-     with app.app_context():
-        db.create_all()
-    app.run(host="0.0.0.0", port=10000)
-
+    pass
